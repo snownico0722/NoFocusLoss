@@ -4,7 +4,9 @@ using SharpestInjector;
 using System.Windows;
 using System.Linq;
 using System.IO;
+using System.Text;
 using System;
+using static SharpestInjector.PInvoke;
 
 namespace NoFocusLossGUI
 {
@@ -13,82 +15,473 @@ namespace NoFocusLossGUI
     /// </summary>
     public partial class MainWindow : Window
     {
+        private const string InitializeExport = "NoFocusLoss_Initialize";
+        private const string DisableCursorBlockingExport = "NoFocusLoss_DisableCursorBlocking";
+        private const string ShutdownAndUnloadExport = "NoFocusLoss_ShutdownAndUnload";
+
+        private const long InitializeUnsafeToUnload = 2;
+        private const uint RemoteCallTimeoutMs = 5000;
+        private const uint WaitObject0 = 0;
+        private const uint WaitTimeout = 0x102;
+        private const int MaxUnloadAttempts = 16;
+
+        private enum RemoteCallStatus
+        {
+            Completed,
+            Failed,
+            TimedOut
+        }
+
         public MainWindow()
         {
             InitializeComponent();
-
             Dll32 = PeFile.Parse("NoFocusLoss.dll");
             Dll64 = PeFile.Parse("NoFocusLoss64.dll");
         }
 
         public List<ProcessInfo> ProcessBindTest = new List<ProcessInfo>();
-
-        PeFile Dll32;
-        PeFile Dll64;
+        private readonly PeFile Dll32;
+        private readonly PeFile Dll64;
 
         private void Refresh(object sender, RoutedEventArgs e)
         {
             ProcessBindTest.Clear();
+            Processes.Items.Clear();
+            InjectedProcesses.Items.Clear();
+            var injected = new List<ProcessInfo>();
 
-            var strings = new List<string>();
             foreach (var process in Process.GetProcesses())
             {
-                var proc = Injector.GetProcessInfo(process);
+                try
+                {
+                    var proc = Injector.GetProcessInfo(process);
+                    if (proc.Modules.Count == 0)
+                        continue;
 
-                if (proc.Modules.Count == 0 || proc.WindowHandle == IntPtr.Zero)
-                    continue;                
+                    proc.FileName = Path.GetFileName(proc.Modules.First().Value.Path);
+                    PeFile dll = proc.Is64Bit ? Dll64 : Dll32;
 
-                string fileName = Path.GetFileName(proc.Modules.First().Value.Path);
-                proc.FileName = fileName;
-
-                ProcessBindTest.Add(proc);
+                    if (FindLoadedModule(proc, dll) != null)
+                        injected.Add(proc);
+                    else if (proc.WindowHandle != IntPtr.Zero)
+                        ProcessBindTest.Add(proc);
+                }
+                catch
+                {
+                    // Protected/exiting processes can't always be inspected.
+                }
+                finally
+                {
+                    process.Dispose();
+                }
             }
 
-            ProcessBindTest = ProcessBindTest.OrderBy(x => x.ToString(), StringComparer.OrdinalIgnoreCase).ToList(); // I tried using data bindings, but MVVM just sucks
-            foreach(var proc in ProcessBindTest)
-            {
+            ProcessBindTest = ProcessBindTest
+                .OrderBy(x => x.ToString(), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var proc in ProcessBindTest)
                 Processes.Items.Add(proc);
-            }
+            foreach (var proc in injected.OrderBy(x => x.ToString(), StringComparer.OrdinalIgnoreCase))
+                InjectedProcesses.Items.Add(proc);
         }
 
         private void Inject(object sender, RoutedEventArgs e)
         {
             var selected = Processes.SelectedItem as ProcessInfo;
-
             if (selected == null)
                 return;
 
-            PeFile dll = Dll64;
-
-            if (selected.Is64Bit == false)
+            try
             {
-                dll = Dll32;
-            }
-            
-            Injector.Inject(selected, dll);
+                var current = GetCurrentProcessInfo(selected.Id);
+                PeFile dll = current.Is64Bit ? Dll64 : Dll32;
 
-            Processes.Items.Remove(selected);
-            InjectedProcesses.Items.Add(selected);
+                if (FindLoadedModule(current, dll) != null)
+                {
+                    MarkAsInjected(current);
+                    MessageBox.Show("NoFocusLoss is already loaded in this process.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var injectStatus = InjectDll(current, dll);
+                if (injectStatus == RemoteCallStatus.TimedOut)
+                {
+                    MarkAsInjected(current);
+                    MessageBox.Show(
+                        "DLL injection did not return in time. The remote thread may still finish, " +
+                        "so refresh the list before trying to inject this process again.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (injectStatus != RemoteCallStatus.Completed)
+                {
+                    MessageBox.Show("Injection failed.", "No Focus Loss",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                current = GetCurrentProcessInfo(selected.Id);
+                var initStatus = CallExport(current, dll, InitializeExport, out var initResult);
+
+                if (initStatus == RemoteCallStatus.TimedOut)
+                {
+                    MarkAsInjected(current);
+                    MessageBox.Show(
+                        "NoFocusLoss initialization did not return in time. The DLL was left loaded " +
+                        "because the remote call may still be running.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (initStatus != RemoteCallStatus.Completed)
+                {
+                    MarkAsInjected(current);
+                    MessageBox.Show(
+                        "The DLL loaded, but initialization could not be called. It was left loaded " +
+                        "so it can be removed explicitly from the Injected list.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (initResult.ToInt64() == InitializeUnsafeToUnload)
+                {
+                    MarkAsInjected(current);
+                    MessageBox.Show(
+                        "The target window thread did not respond while NoFocusLoss was initializing. " +
+                        "The DLL was left loaded to avoid an unsafe unload; restarting the target " +
+                        "program is the safest way to clear it.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (initResult == IntPtr.Zero)
+                {
+                    if (UnloadDllCompletely(current.Id, dll) != RemoteCallStatus.Completed)
+                        MarkAsInjected(current);
+
+                    MessageBox.Show("The DLL loaded, but NoFocusLoss initialization failed.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                if (BlockCursorCheckBox.IsChecked != true)
+                {
+                    var optionStatus = CallExport(
+                        current, dll, DisableCursorBlockingExport, out var optionResult);
+
+                    if (optionStatus == RemoteCallStatus.TimedOut)
+                    {
+                        MarkAsInjected(current);
+                        MessageBox.Show(
+                            "NoFocusLoss loaded, but applying the cursor option timed out. " +
+                            "The DLL was left loaded because the remote call may still be running.",
+                            "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    if (optionStatus != RemoteCallStatus.Completed || optionResult == IntPtr.Zero)
+                    {
+                        if (UnloadDllCompletely(current.Id, dll) != RemoteCallStatus.Completed)
+                            MarkAsInjected(current);
+
+                        MessageBox.Show("NoFocusLoss loaded, but the cursor option could not be applied.",
+                            "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+                }
+
+                MarkAsInjected(current);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Injection failed:\n{ex.Message}", "No Focus Loss",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void Unload(object sender, RoutedEventArgs e)
         {
             var selected = InjectedProcesses.SelectedItem as ProcessInfo;
-
             if (selected == null)
                 return;
 
-            PeFile dll = Dll64;
-
-            if (selected.Is64Bit == false)
+            try
             {
-                dll = Dll32;
+                var current = GetCurrentProcessInfo(selected.Id);
+                PeFile dll = current.Is64Bit ? Dll64 : Dll32;
+
+                if (FindLoadedModule(current, dll) == null)
+                {
+                    InjectedProcesses.Items.Remove(selected);
+                    if (current.WindowHandle != IntPtr.Zero)
+                        Processes.Items.Add(current);
+                    return;
+                }
+
+                var unloadStatus = UnloadDllCompletely(current.Id, dll);
+                if (unloadStatus == RemoteCallStatus.TimedOut)
+                {
+                    MessageBox.Show(
+                        "NoFocusLoss shutdown/unload timed out. The DLL was left loaded because the " +
+                        "remote call may still be running. Refresh the list before trying again.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (unloadStatus != RemoteCallStatus.Completed)
+                {
+                    MessageBox.Show(
+                        "NoFocusLoss couldn't remove its hooks and unload safely, so the DLL was left loaded.",
+                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                InjectedProcesses.Items.Remove(selected);
+                try
+                {
+                    current = GetCurrentProcessInfo(selected.Id);
+                    if (current.WindowHandle != IntPtr.Zero)
+                        Processes.Items.Add(current);
+                }
+                catch
+                {
+                    // The target exited while it was being unloaded.
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Unload failed:\n{ex.Message}", "No Focus Loss",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void MarkAsInjected(ProcessInfo process)
+        {
+            var existing = Processes.Items.Cast<ProcessInfo>()
+                .FirstOrDefault(x => x.Id == process.Id);
+            if (existing != null)
+                Processes.Items.Remove(existing);
+
+            if (!InjectedProcesses.Items.Cast<ProcessInfo>().Any(x => x.Id == process.Id))
+                InjectedProcesses.Items.Add(process);
+        }
+
+        private static RemoteCallStatus InjectDll(ProcessInfo process, PeFile dll)
+        {
+            if (dll.Is64Bit != process.Is64Bit || process.Kernel32 == IntPtr.Zero)
+                return RemoteCallStatus.Failed;
+
+            IntPtr processHandle = IntPtr.Zero;
+            IntPtr threadHandle = IntPtr.Zero;
+            IntPtr remotePath = IntPtr.Zero;
+            bool canFreeRemotePath = true;
+
+            try
+            {
+                processHandle = OpenProcess(
+                    PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION |
+                    PROCESS_VM_WRITE | PROCESS_VM_READ,
+                    false,
+                    process.Id);
+                if (processHandle == IntPtr.Zero)
+                    return RemoteCallStatus.Failed;
+
+                byte[] pathBytes = Encoding.Unicode.GetBytes(dll.FileName + '\0');
+                remotePath = VirtualAllocEx(
+                    processHandle, IntPtr.Zero, (uint)pathBytes.Length,
+                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (remotePath == IntPtr.Zero)
+                    return RemoteCallStatus.Failed;
+
+                if (!WriteProcessMemory(
+                        processHandle, remotePath, pathBytes, (uint)pathBytes.Length,
+                        out uint bytesWritten) || bytesWritten != pathBytes.Length)
+                    return RemoteCallStatus.Failed;
+
+                int loadLibraryRva = process.IsWOW64
+                    ? Constants.LoadLibrary32
+                    : Constants.LoadLibrary;
+                if (loadLibraryRva == 0)
+                    return RemoteCallStatus.Failed;
+
+                var loadLibraryAddress = IntPtr.Add(process.Kernel32, loadLibraryRva);
+                threadHandle = CreateRemoteThread(
+                    processHandle, IntPtr.Zero, 0, loadLibraryAddress, remotePath, 0, out _);
+                if (threadHandle == IntPtr.Zero)
+                    return RemoteCallStatus.Failed;
+
+                uint wait = WaitForSingleObject(threadHandle, RemoteCallTimeoutMs);
+                if (wait == WaitTimeout)
+                {
+                    // The target thread may still be using the path after we return.
+                    // Leak this tiny allocation rather than create a use-after-free.
+                    canFreeRemotePath = false;
+                    return RemoteCallStatus.TimedOut;
+                }
+                if (wait != WaitObject0)
+                    return RemoteCallStatus.Failed;
+
+                if (!GetExitCodeThread(threadHandle, out long exitCode) || exitCode == 0)
+                    return RemoteCallStatus.Failed;
+
+                return RemoteCallStatus.Completed;
+            }
+            finally
+            {
+                if (threadHandle != IntPtr.Zero)
+                    CloseHandle(threadHandle);
+                if (canFreeRemotePath && remotePath != IntPtr.Zero && processHandle != IntPtr.Zero)
+                    VirtualFreeEx(processHandle, remotePath, 0, MEM_RELEASE);
+                if (processHandle != IntPtr.Zero)
+                    CloseHandle(processHandle);
+            }
+        }
+
+        private RemoteCallStatus UnloadDllCompletely(uint processId, PeFile dll)
+        {
+            for (int attempt = 0; attempt < MaxUnloadAttempts; attempt++)
+            {
+                ProcessInfo current;
+                try
+                {
+                    current = GetCurrentProcessInfo(processId);
+                }
+                catch
+                {
+                    return RemoteCallStatus.Completed;
+                }
+
+                if (FindLoadedModule(current, dll) == null)
+                    return RemoteCallStatus.Completed;
+
+                var status = CallExport(
+                    current, dll, ShutdownAndUnloadExport, out var result);
+
+                if (status != RemoteCallStatus.Completed)
+                    return status;
+                if (result == IntPtr.Zero)
+                    return RemoteCallStatus.Failed;
             }
 
-            Injector.Unload(selected, dll);
+            try
+            {
+                var current = GetCurrentProcessInfo(processId);
+                return FindLoadedModule(current, dll) == null
+                    ? RemoteCallStatus.Completed
+                    : RemoteCallStatus.Failed;
+            }
+            catch
+            {
+                return RemoteCallStatus.Completed;
+            }
+        }
 
-            InjectedProcesses.Items.Remove(selected);
-            Processes.Items.Add(selected);
+        private static RemoteCallStatus CallExport(ProcessInfo process, PeFile dll,
+            string exportName, out IntPtr result)
+        {
+            result = IntPtr.Zero;
+            try
+            {
+                var module = FindLoadedModule(process, dll);
+                if (module == null || !TryGetExportRva(dll, exportName, out var exportRva))
+                    return RemoteCallStatus.Failed;
+
+                return RunRemoteFunction(
+                    process, IntPtr.Add(module.MemoryAddress, exportRva), IntPtr.Zero, out result);
+            }
+            catch
+            {
+                return RemoteCallStatus.Failed;
+            }
+        }
+
+        private static RemoteCallStatus RunRemoteFunction(ProcessInfo process, IntPtr function,
+            IntPtr parameter, out IntPtr result)
+        {
+            result = IntPtr.Zero;
+            IntPtr processHandle = IntPtr.Zero;
+            IntPtr threadHandle = IntPtr.Zero;
+
+            try
+            {
+                processHandle = OpenProcess(
+                    PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION |
+                    PROCESS_VM_WRITE | PROCESS_VM_READ,
+                    false,
+                    process.Id);
+                if (processHandle == IntPtr.Zero)
+                    return RemoteCallStatus.Failed;
+
+                threadHandle = CreateRemoteThread(
+                    processHandle, IntPtr.Zero, 0, function, parameter, 0, out _);
+                if (threadHandle == IntPtr.Zero)
+                    return RemoteCallStatus.Failed;
+
+                uint wait = WaitForSingleObject(threadHandle, RemoteCallTimeoutMs);
+                if (wait == WaitTimeout)
+                    return RemoteCallStatus.TimedOut;
+                if (wait != WaitObject0)
+                    return RemoteCallStatus.Failed;
+
+                if (!GetExitCodeThread(threadHandle, out long exitCode))
+                    return RemoteCallStatus.Failed;
+
+                result = new IntPtr(exitCode);
+                return RemoteCallStatus.Completed;
+            }
+            finally
+            {
+                if (threadHandle != IntPtr.Zero)
+                    CloseHandle(threadHandle);
+                if (processHandle != IntPtr.Zero)
+                    CloseHandle(processHandle);
+            }
+        }
+
+        private static ModuleInfo FindLoadedModule(ProcessInfo process, PeFile dll)
+        {
+            string expectedPath = NormalizePath(dll.FileName);
+            return process.Modules.Values.FirstOrDefault(module =>
+                string.Equals(NormalizePath(module.Path), expectedPath,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizePath(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch
+            {
+                return path ?? string.Empty;
+            }
+        }
+
+        private static bool TryGetExportRva(PeFile dll, string exportName, out int exportRva)
+        {
+            if (dll.Exports.TryGetValue(exportName, out exportRva))
+                return true;
+
+            var decorated = dll.Exports.FirstOrDefault(x =>
+                x.Key.IndexOf(exportName, StringComparison.Ordinal) >= 0);
+            if (string.IsNullOrEmpty(decorated.Key))
+                return false;
+
+            exportRva = decorated.Value;
+            return true;
+        }
+
+        private static ProcessInfo GetCurrentProcessInfo(uint processId)
+        {
+            using (var process = Process.GetProcessById((int)processId))
+            {
+                return Injector.GetProcessInfo(process);
+            }
         }
     }
 }
