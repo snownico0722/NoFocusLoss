@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NoFocusLossGUI"
         mc:Ignorable="d"
-        Title="No Focus Loss" Height="450" Width="800">
+        Title="No Focus Loss" Height="450" Width="860">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition/>
@@ -14,32 +14,40 @@
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
-                <ColumnDefinition Width="80"/>
+                <ColumnDefinition Width="180"/>
             </Grid.ColumnDefinitions>
             <ListBox Grid.Column="0" x:Name="Processes" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="20"/>
-            <Grid Grid.Column="1" Margin="0,15,15,25">
+            <Grid Grid.Column="1" Margin="0,15,15,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40"/>
                     <RowDefinition/>
                     <RowDefinition/>
+                    <RowDefinition Height="50"/>
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15">Injectable</TextBlock>
-                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Inject" FontSize="14" Width="50" Click="Inject">
+                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Inject" FontSize="14" Width="60" Click="Inject">
                     <Button.ToolTip>
-                        <ToolTip>Inject DLLs into the selected process</ToolTip>
+                        <ToolTip>Inject NoFocusLoss into the selected process</ToolTip>
                     </Button.ToolTip>
                 </Button>
-                <Button Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Refresh" FontSize="14" Width="60" Click="Refresh">
+                <Button Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Refresh" FontSize="14" Width="70" Click="Refresh">
                     <Button.ToolTip>
-                        <ToolTip>Refresh the process list</ToolTip>
+                        <ToolTip>Refresh both the injectable and already-injected process lists</ToolTip>
                     </Button.ToolTip>
                 </Button>
+                <CheckBox Grid.Row="3" x:Name="BlockCursorCheckBox" IsChecked="True"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="155">
+                    <CheckBox.ToolTip>
+                        <ToolTip>Applied when you click Inject. Prevents that program from moving the mouse with SetCursorPos while unfocused.</ToolTip>
+                    </CheckBox.ToolTip>
+                    <TextBlock Text="Block cursor recenter while unfocused" TextWrapping="Wrap"/>
+                </CheckBox>
             </Grid>
         </Grid>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
-                <ColumnDefinition Width="80"/>
+                <ColumnDefinition Width="180"/>
             </Grid.ColumnDefinitions>
             <ListBox x:Name="InjectedProcesses" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="20"/>
             <Grid Grid.Column="1" Margin="0,15,15,25">
@@ -48,9 +56,9 @@
                     <RowDefinition/>
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16">Injected</TextBlock>
-                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Unload" FontSize="14" Width="60" Click="Unload">
+                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Unload" FontSize="14" Width="70" Click="Unload">
                     <Button.ToolTip>
-                        <ToolTip>Unload NoFocusLoss from the selected process</ToolTip>
+                        <ToolTip>Safely remove NoFocusLoss and unload it from the selected process</ToolTip>
                     </Button.ToolTip>
                 </Button>
             </Grid>
