@@ -1,0 +1,41 @@
+name: Build package
+
+on:
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release
+        shell: pwsh
+        run: msbuild NoFocusLoss.sln /m /p:Configuration=Release '/p:Platform=Any CPU'
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          $out = 'NoFocusLossGUI\bin\Release'
+          @('NoFocusLossGUI.exe', 'NoFocusLoss.dll', 'NoFocusLoss64.dll') | ForEach-Object {
+            if (-not (Test-Path (Join-Path $out $_))) { throw "Missing $_" }
+          }
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoFocusLoss-PR2-Release
+          path: NoFocusLossGUI/bin/Release/**
+          if-no-files-found: error
+          retention-days: 7
