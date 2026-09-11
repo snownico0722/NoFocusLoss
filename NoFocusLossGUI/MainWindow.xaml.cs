@@ -100,8 +100,8 @@ namespace NoFocusLossGUI
                 if (FindLoadedModule(current, dll) != null)
                 {
                     MarkAsInjected(current);
-                    MessageBox.Show("NoFocusLoss is already loaded in this process.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(UiStrings.AlreadyLoaded, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
 
@@ -109,16 +109,14 @@ namespace NoFocusLossGUI
                 if (injectStatus == RemoteCallStatus.TimedOut)
                 {
                     MarkAsInjected(current);
-                    MessageBox.Show(
-                        "DLL injection did not return in time. The remote thread may still finish, " +
-                        "so refresh the list before trying to inject this process again.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(UiStrings.InjectionTimedOut, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
                 if (injectStatus != RemoteCallStatus.Completed)
                 {
-                    MessageBox.Show("Injection failed.", "No Focus Loss",
+                    MessageBox.Show(UiStrings.InjectionFailed, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
@@ -129,31 +127,24 @@ namespace NoFocusLossGUI
                 if (initStatus == RemoteCallStatus.TimedOut)
                 {
                     MarkAsInjected(current);
-                    MessageBox.Show(
-                        "NoFocusLoss initialization did not return in time. The DLL was left loaded " +
-                        "because the remote call may still be running.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(UiStrings.InitializationTimedOut, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
                 if (initStatus != RemoteCallStatus.Completed)
                 {
                     MarkAsInjected(current);
-                    MessageBox.Show(
-                        "The DLL loaded, but initialization could not be called. It was left loaded " +
-                        "so it can be removed explicitly from the Injected list.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(UiStrings.InitializationCallFailed, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
                 if (initResult.ToInt64() == InitializeUnsafeToUnload)
                 {
                     MarkAsInjected(current);
-                    MessageBox.Show(
-                        "The target window thread did not respond while NoFocusLoss was initializing. " +
-                        "The DLL was left loaded to avoid an unsafe unload; restarting the target " +
-                        "program is the safest way to clear it.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(UiStrings.InitializationUnsafeToUnload, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
@@ -162,8 +153,8 @@ namespace NoFocusLossGUI
                     if (UnloadDllCompletely(current.Id, dll) != RemoteCallStatus.Completed)
                         MarkAsInjected(current);
 
-                    MessageBox.Show("The DLL loaded, but NoFocusLoss initialization failed.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(UiStrings.InitializationFailed, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
@@ -175,10 +166,8 @@ namespace NoFocusLossGUI
                     if (optionStatus == RemoteCallStatus.TimedOut)
                     {
                         MarkAsInjected(current);
-                        MessageBox.Show(
-                            "NoFocusLoss loaded, but applying the cursor option timed out. " +
-                            "The DLL was left loaded because the remote call may still be running.",
-                            "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show(UiStrings.CursorOptionTimedOut, UiStrings.WindowTitle,
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
                         return;
                     }
 
@@ -187,8 +176,8 @@ namespace NoFocusLossGUI
                         if (UnloadDllCompletely(current.Id, dll) != RemoteCallStatus.Completed)
                             MarkAsInjected(current);
 
-                        MessageBox.Show("NoFocusLoss loaded, but the cursor option could not be applied.",
-                            "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show(UiStrings.CursorOptionFailed, UiStrings.WindowTitle,
+                            MessageBoxButton.OK, MessageBoxImage.Error);
                         return;
                     }
                 }
@@ -197,8 +186,9 @@ namespace NoFocusLossGUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Injection failed:\n{ex.Message}", "No Focus Loss",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    string.Format(UiStrings.InjectionFailedWithMessage, Environment.NewLine, ex.Message),
+                    UiStrings.WindowTitle, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -224,18 +214,15 @@ namespace NoFocusLossGUI
                 var unloadStatus = UnloadDllCompletely(current.Id, dll);
                 if (unloadStatus == RemoteCallStatus.TimedOut)
                 {
-                    MessageBox.Show(
-                        "NoFocusLoss shutdown/unload timed out. The DLL was left loaded because the " +
-                        "remote call may still be running. Refresh the list before trying again.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(UiStrings.UnloadTimedOut, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
                 if (unloadStatus != RemoteCallStatus.Completed)
                 {
-                    MessageBox.Show(
-                        "NoFocusLoss couldn't remove its hooks and unload safely, so the DLL was left loaded.",
-                        "No Focus Loss", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(UiStrings.UnloadUnsafe, UiStrings.WindowTitle,
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
@@ -253,8 +240,9 @@ namespace NoFocusLossGUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unload failed:\n{ex.Message}", "No Focus Loss",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    string.Format(UiStrings.UnloadFailedWithMessage, Environment.NewLine, ex.Message),
+                    UiStrings.WindowTitle, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
