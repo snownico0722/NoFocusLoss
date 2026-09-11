@@ -13,6 +13,7 @@ namespace
     constexpr DWORD kInitializeSucceeded = 1;
     constexpr DWORD kInitializeUnsafeToUnload = 2;
     constexpr UINT kSubclassTimeoutMs = 2000;
+    constexpr wchar_t kInjectedWindowProperty[] = L"NoFocusLoss_Injected_8A11C8C7";
 
     enum class SubclassChangeResult
     {
@@ -129,6 +130,18 @@ namespace
     void SetUnfocused(bool value)
     {
         InterlockedExchange(&g_unfocused, value ? TRUE : FALSE);
+    }
+
+    void SetInjectedMarker()
+    {
+        if (g_mainWindow)
+            SetPropW(g_mainWindow, kInjectedWindowProperty, reinterpret_cast<HANDLE>(1));
+    }
+
+    void ClearInjectedMarker()
+    {
+        if (g_mainWindow)
+            RemovePropW(g_mainWindow, kInjectedWindowProperty);
     }
 
     HWND WINAPI DetourGetForegroundWindow()
@@ -316,6 +329,10 @@ namespace
             if (!g_mainWindow)
                 break;
 
+            // The marker is written from inside the target process, so UIPI cannot block it.
+            // Keep it set for any state where the DLL remains loaded, including failed init.
+            SetInjectedMarker();
+
             g_uiThreadId = GetWindowThreadProcessId(g_mainWindow, nullptr);
             if (!g_uiThreadId)
                 break;
@@ -384,7 +401,10 @@ namespace
             return false;
 
         if (!ReadFlag(&g_initialized))
+        {
+            ClearInjectedMarker();
             return true;
+        }
 
         if (InterlockedCompareExchange(&g_operationInProgress, TRUE, FALSE) != FALSE)
             return false;
@@ -417,6 +437,7 @@ namespace
             return false;
         }
 
+        ClearInjectedMarker();
         g_mainWindow = nullptr;
         g_uiThreadId = 0;
         SetUnfocused(false);
