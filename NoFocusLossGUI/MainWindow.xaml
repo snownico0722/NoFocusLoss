@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NoFocusLossGUI"
         mc:Ignorable="d"
-        Title="No Focus Loss" Height="450" Width="860">
+        Title="{x:Static local:UiStrings.WindowTitle}" Height="450" Width="860">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition/>
@@ -24,23 +24,26 @@
                     <RowDefinition/>
                     <RowDefinition Height="50"/>
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15">Injectable</TextBlock>
-                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Inject" FontSize="14" Width="60" Click="Inject">
+                <TextBlock Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15"
+                           Text="{x:Static local:UiStrings.Injectable}"/>
+                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Content="{x:Static local:UiStrings.Inject}" FontSize="14" Width="60" Click="Inject">
                     <Button.ToolTip>
-                        <ToolTip>Inject NoFocusLoss into the selected process</ToolTip>
+                        <ToolTip Content="{x:Static local:UiStrings.InjectTooltip}"/>
                     </Button.ToolTip>
                 </Button>
-                <Button Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Refresh" FontSize="14" Width="70" Click="Refresh">
+                <Button Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Content="{x:Static local:UiStrings.Refresh}" FontSize="14" Width="70" Click="Refresh">
                     <Button.ToolTip>
-                        <ToolTip>Refresh both the injectable and already-injected process lists</ToolTip>
+                        <ToolTip Content="{x:Static local:UiStrings.RefreshTooltip}"/>
                     </Button.ToolTip>
                 </Button>
                 <CheckBox Grid.Row="3" x:Name="BlockCursorCheckBox" IsChecked="True"
                           HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="155">
                     <CheckBox.ToolTip>
-                        <ToolTip>Applied when you click Inject. Prevents that program from moving the mouse with SetCursorPos while unfocused.</ToolTip>
+                        <ToolTip Content="{x:Static local:UiStrings.BlockCursorTooltip}"/>
                     </CheckBox.ToolTip>
-                    <TextBlock Text="Block cursor recenter while unfocused" TextWrapping="Wrap"/>
+                    <TextBlock Text="{x:Static local:UiStrings.BlockCursor}" TextWrapping="Wrap"/>
                 </CheckBox>
             </Grid>
         </Grid>
@@ -55,10 +58,12 @@
                     <RowDefinition Height="40"/>
                     <RowDefinition/>
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16">Injected</TextBlock>
-                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Content="Unload" FontSize="14" Width="70" Click="Unload">
+                <TextBlock Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16"
+                           Text="{x:Static local:UiStrings.Injected}"/>
+                <Button Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Content="{x:Static local:UiStrings.Unload}" FontSize="14" Width="70" Click="Unload">
                     <Button.ToolTip>
-                        <ToolTip>Safely remove NoFocusLoss and unload it from the selected process</ToolTip>
+                        <ToolTip Content="{x:Static local:UiStrings.UnloadTooltip}"/>
                     </Button.ToolTip>
                 </Button>
             </Grid>

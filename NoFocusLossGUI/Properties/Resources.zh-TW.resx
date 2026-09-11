@@ -115,27 +115,27 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="WindowTitle" xml:space="preserve"><value>No Focus Loss</value></data>
-  <data name="Injectable" xml:space="preserve"><value>Injectable</value></data>
-  <data name="Inject" xml:space="preserve"><value>Inject</value></data>
-  <data name="InjectTooltip" xml:space="preserve"><value>Inject NoFocusLoss into the selected process</value></data>
-  <data name="Refresh" xml:space="preserve"><value>Refresh</value></data>
-  <data name="RefreshTooltip" xml:space="preserve"><value>Refresh both the injectable and already-injected process lists</value></data>
-  <data name="BlockCursor" xml:space="preserve"><value>Block cursor recenter while unfocused</value></data>
-  <data name="BlockCursorTooltip" xml:space="preserve"><value>Applied when you click Inject. Prevents that program from moving the mouse with SetCursorPos while unfocused.</value></data>
-  <data name="Injected" xml:space="preserve"><value>Injected</value></data>
-  <data name="Unload" xml:space="preserve"><value>Unload</value></data>
-  <data name="UnloadTooltip" xml:space="preserve"><value>Safely remove NoFocusLoss and unload it from the selected process</value></data>
-  <data name="AlreadyLoaded" xml:space="preserve"><value>NoFocusLoss is already loaded in this process.</value></data>
-  <data name="InjectionTimedOut" xml:space="preserve"><value>DLL injection did not return in time. The remote thread may still finish, so refresh the list before trying to inject this process again.</value></data>
-  <data name="InjectionFailed" xml:space="preserve"><value>Injection failed.</value></data>
-  <data name="InitializationTimedOut" xml:space="preserve"><value>NoFocusLoss initialization did not return in time. The DLL was left loaded because the remote call may still be running.</value></data>
-  <data name="InitializationCallFailed" xml:space="preserve"><value>The DLL loaded, but initialization could not be called. It was left loaded so it can be removed explicitly from the Injected list.</value></data>
-  <data name="InitializationUnsafeToUnload" xml:space="preserve"><value>The target window thread did not respond while NoFocusLoss was initializing. The DLL was left loaded to avoid an unsafe unload; restarting the target program is the safest way to clear it.</value></data>
-  <data name="InitializationFailed" xml:space="preserve"><value>The DLL loaded, but NoFocusLoss initialization failed.</value></data>
-  <data name="CursorOptionTimedOut" xml:space="preserve"><value>NoFocusLoss loaded, but applying the cursor option timed out. The DLL was left loaded because the remote call may still be running.</value></data>
-  <data name="CursorOptionFailed" xml:space="preserve"><value>NoFocusLoss loaded, but the cursor option could not be applied.</value></data>
-  <data name="InjectionFailedWithMessage" xml:space="preserve"><value>Injection failed:{0}{1}</value></data>
-  <data name="UnloadTimedOut" xml:space="preserve"><value>NoFocusLoss shutdown/unload timed out. The DLL was left loaded because the remote call may still be running. Refresh the list before trying again.</value></data>
-  <data name="UnloadUnsafe" xml:space="preserve"><value>NoFocusLoss couldn't remove its hooks and unload safely, so the DLL was left loaded.</value></data>
-  <data name="UnloadFailedWithMessage" xml:space="preserve"><value>Unload failed:{0}{1}</value></data>
+  <data name="Injectable" xml:space="preserve"><value>可注入</value></data>
+  <data name="Inject" xml:space="preserve"><value>注入</value></data>
+  <data name="InjectTooltip" xml:space="preserve"><value>將 NoFocusLoss 注入所選程序</value></data>
+  <data name="Refresh" xml:space="preserve"><value>重新整理</value></data>
+  <data name="RefreshTooltip" xml:space="preserve"><value>重新整理可注入與已注入程序清單</value></data>
+  <data name="BlockCursor" xml:space="preserve"><value>失去焦點時阻止游標自動置中</value></data>
+  <data name="BlockCursorTooltip" xml:space="preserve"><value>按下「注入」時生效。阻止該程序在失去焦點時透過 SetCursorPos 移動滑鼠。</value></data>
+  <data name="Injected" xml:space="preserve"><value>已注入</value></data>
+  <data name="Unload" xml:space="preserve"><value>卸載</value></data>
+  <data name="UnloadTooltip" xml:space="preserve"><value>從所選程序中安全移除並卸載 NoFocusLoss</value></data>
+  <data name="AlreadyLoaded" xml:space="preserve"><value>此程序已載入 NoFocusLoss。</value></data>
+  <data name="InjectionTimedOut" xml:space="preserve"><value>DLL 注入未在時限內返回。遠端執行緒可能仍會完成，請先重新整理清單，再嘗試重新注入此程序。</value></data>
+  <data name="InjectionFailed" xml:space="preserve"><value>注入失敗。</value></data>
+  <data name="InitializationTimedOut" xml:space="preserve"><value>NoFocusLoss 初始化未在時限內返回。由於遠端呼叫可能仍在執行，DLL 已保持載入狀態。</value></data>
+  <data name="InitializationCallFailed" xml:space="preserve"><value>DLL 已載入，但無法呼叫初始化函式。DLL 已保持載入狀態，可從「已注入」清單中手動卸載。</value></data>
+  <data name="InitializationUnsafeToUnload" xml:space="preserve"><value>目標視窗執行緒在 NoFocusLoss 初始化期間未回應。為避免不安全卸載，DLL 已保持載入狀態；重新啟動目標程序是最安全的清除方式。</value></data>
+  <data name="InitializationFailed" xml:space="preserve"><value>DLL 已載入，但 NoFocusLoss 初始化失敗。</value></data>
+  <data name="CursorOptionTimedOut" xml:space="preserve"><value>NoFocusLoss 已載入，但套用游標選項逾時。由於遠端呼叫可能仍在執行，DLL 已保持載入狀態。</value></data>
+  <data name="CursorOptionFailed" xml:space="preserve"><value>NoFocusLoss 已載入，但無法套用游標選項。</value></data>
+  <data name="InjectionFailedWithMessage" xml:space="preserve"><value>注入失敗：{0}{1}</value></data>
+  <data name="UnloadTimedOut" xml:space="preserve"><value>NoFocusLoss 關閉/卸載逾時。由於遠端呼叫可能仍在執行，DLL 已保持載入狀態。請先重新整理清單，再重試。</value></data>
+  <data name="UnloadUnsafe" xml:space="preserve"><value>NoFocusLoss 無法安全移除 Hook 並卸載，因此 DLL 已保持載入狀態。</value></data>
+  <data name="UnloadFailedWithMessage" xml:space="preserve"><value>卸載失敗：{0}{1}</value></data>
 </root>
