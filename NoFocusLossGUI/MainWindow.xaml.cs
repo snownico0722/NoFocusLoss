@@ -6,6 +6,7 @@ using System.Linq;
 using System.IO;
 using System.Text;
 using System;
+using System.Runtime.InteropServices;
 using static SharpestInjector.PInvoke;
 
 namespace NoFocusLossGUI
@@ -18,12 +19,43 @@ namespace NoFocusLossGUI
         private const string InitializeExport = "NoFocusLoss_Initialize";
         private const string DisableCursorBlockingExport = "NoFocusLoss_DisableCursorBlocking";
         private const string ShutdownAndUnloadExport = "NoFocusLoss_ShutdownAndUnload";
+        private const string InjectedWindowProperty = "NoFocusLoss_Injected_8A11C8C7";
 
         private const long InitializeUnsafeToUnload = 2;
         private const uint RemoteCallTimeoutMs = 5000;
         private const uint WaitObject0 = 0;
         private const uint WaitTimeout = 0x102;
         private const int MaxUnloadAttempts = 16;
+        private const uint GwOwner = 4;
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetPropW(IntPtr hWnd, string lpString, IntPtr hData);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern IntPtr GetPropW(IntPtr hWnd, string lpString);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern IntPtr RemovePropW(IntPtr hWnd, string lpString);
+
+        private sealed class RefreshWindowInfo
+        {
+            public IntPtr DisplayWindow;
+            public IntPtr MarkerWindow;
+            public bool IsInjected;
+
+            public IntPtr BestWindow
+            {
+                get { return DisplayWindow != IntPtr.Zero ? DisplayWindow : MarkerWindow; }
+            }
+        }
 
         private enum RemoteCallStatus
         {
@@ -45,45 +77,137 @@ namespace NoFocusLossGUI
 
         private void Refresh(object sender, RoutedEventArgs e)
         {
-            ProcessBindTest.Clear();
-            Processes.Items.Clear();
-            InjectedProcesses.Items.Clear();
+            var stopwatch = Stopwatch.StartNew();
+            var injectable = new List<ProcessInfo>();
             var injected = new List<ProcessInfo>();
+            var processWindows = GetRefreshProcessWindows();
 
-            foreach (var process in Process.GetProcesses())
+            foreach (var entry in processWindows)
             {
                 try
                 {
-                    var proc = Injector.GetProcessInfo(process);
-                    if (proc.Modules.Count == 0)
-                        continue;
+                    using (var process = Process.GetProcessById((int)entry.Key))
+                    {
+                        if (process.HasExited || !TryGetProcessBitness(entry.Key, out var isWow64))
+                            continue;
 
-                    proc.FileName = Path.GetFileName(proc.Modules.First().Value.Path);
-                    PeFile dll = proc.Is64Bit ? Dll64 : Dll32;
+                        var window = entry.Value.BestWindow;
+                        if (window == IntPtr.Zero)
+                            continue;
 
-                    if (FindLoadedModule(proc, dll) != null)
-                        injected.Add(proc);
-                    else if (proc.WindowHandle != IntPtr.Zero)
-                        ProcessBindTest.Add(proc);
+                        var proc = new ProcessInfo
+                        {
+                            Id = entry.Key,
+                            WindowHandle = window,
+                            WindowTitle = Injector.GetWindowTitle(window).Trim(),
+                            FileName = process.ProcessName + ".exe",
+                            IsWOW64 = isWow64
+                        };
+
+                        if (entry.Value.IsInjected)
+                            injected.Add(proc);
+                        else
+                            injectable.Add(proc);
+                    }
                 }
                 catch
                 {
-                    // Protected/exiting processes can't always be inspected.
-                }
-                finally
-                {
-                    process.Dispose();
+                    // The process may have exited or become inaccessible during refresh.
                 }
             }
 
-            ProcessBindTest = ProcessBindTest
+            ProcessBindTest = injectable
                 .OrderBy(x => x.ToString(), StringComparer.OrdinalIgnoreCase)
                 .ToList();
+
+            Processes.Items.Clear();
+            InjectedProcesses.Items.Clear();
 
             foreach (var proc in ProcessBindTest)
                 Processes.Items.Add(proc);
             foreach (var proc in injected.OrderBy(x => x.ToString(), StringComparer.OrdinalIgnoreCase))
                 InjectedProcesses.Items.Add(proc);
+
+            stopwatch.Stop();
+            Debug.WriteLine($"NoFocusLoss refresh: {stopwatch.ElapsedMilliseconds} ms, " +
+                $"{processWindows.Count} windowed processes");
+        }
+
+        private static Dictionary<uint, RefreshWindowInfo> GetRefreshProcessWindows()
+        {
+            var result = new Dictionary<uint, RefreshWindowInfo>();
+            uint currentProcessId;
+            using (var currentProcess = Process.GetCurrentProcess())
+                currentProcessId = (uint)currentProcess.Id;
+
+            // EnumChildWindows(NULL, ...) is equivalent to one EnumWindows pass. A marker is
+            // checked on every top-level window, while ordinary injectable candidates are only
+            // visible, unowned windows. No process module enumeration is needed here.
+            foreach (var window in Injector.GetChildWindows(IntPtr.Zero))
+            {
+                GetWindowThreadProcessId(window, out var processId);
+                if (processId == 0 || processId == currentProcessId)
+                    continue;
+
+                bool hasMarker = GetPropW(window, InjectedWindowProperty) != IntPtr.Zero;
+                bool isDisplayCandidate =
+                    IsWindowVisible(window) && GetWindow(window, GwOwner) == IntPtr.Zero;
+                if (!hasMarker && !isDisplayCandidate)
+                    continue;
+
+                if (!result.TryGetValue(processId, out var info))
+                {
+                    info = new RefreshWindowInfo();
+                    result.Add(processId, info);
+                }
+
+                if (isDisplayCandidate && info.DisplayWindow == IntPtr.Zero)
+                    info.DisplayWindow = window;
+                if (hasMarker)
+                {
+                    info.MarkerWindow = window;
+                    info.IsInjected = true;
+                }
+            }
+
+            return result;
+        }
+
+        private static bool TryGetProcessBitness(uint processId, out bool isWow64)
+        {
+            isWow64 = false;
+            var processHandle = OpenProcess(PROCESS_QUERY_INFORMATION, false, processId);
+            if (processHandle == IntPtr.Zero)
+                return false;
+
+            try
+            {
+                return IsWow64Process(processHandle, out isWow64);
+            }
+            finally
+            {
+                CloseHandle(processHandle);
+            }
+        }
+
+        private static void SetInjectedMarker(uint processId)
+        {
+            foreach (var window in Injector.GetChildWindows(IntPtr.Zero))
+            {
+                GetWindowThreadProcessId(window, out var windowProcessId);
+                if (windowProcessId == processId)
+                    SetPropW(window, InjectedWindowProperty, new IntPtr(1));
+            }
+        }
+
+        private static void ClearInjectedMarker(uint processId)
+        {
+            foreach (var window in Injector.GetChildWindows(IntPtr.Zero))
+            {
+                GetWindowThreadProcessId(window, out var windowProcessId);
+                if (windowProcessId == processId)
+                    RemovePropW(window, InjectedWindowProperty);
+            }
         }
 
         private void Inject(object sender, RoutedEventArgs e)
@@ -99,6 +223,7 @@ namespace NoFocusLossGUI
 
                 if (FindLoadedModule(current, dll) != null)
                 {
+                    SetInjectedMarker(current.Id);
                     MarkAsInjected(current);
                     MessageBox.Show(UiStrings.AlreadyLoaded, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Information);
@@ -108,6 +233,8 @@ namespace NoFocusLossGUI
                 var injectStatus = InjectDll(current, dll);
                 if (injectStatus == RemoteCallStatus.TimedOut)
                 {
+                    // The remote LoadLibrary thread may still fail after the timeout. Keep the
+                    // current UI behavior, but do not persist the marker until loading is known.
                     MarkAsInjected(current);
                     MessageBox.Show(UiStrings.InjectionTimedOut, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -126,6 +253,7 @@ namespace NoFocusLossGUI
 
                 if (initStatus == RemoteCallStatus.TimedOut)
                 {
+                    SetInjectedMarker(current.Id);
                     MarkAsInjected(current);
                     MessageBox.Show(UiStrings.InitializationTimedOut, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -134,6 +262,7 @@ namespace NoFocusLossGUI
 
                 if (initStatus != RemoteCallStatus.Completed)
                 {
+                    SetInjectedMarker(current.Id);
                     MarkAsInjected(current);
                     MessageBox.Show(UiStrings.InitializationCallFailed, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -142,6 +271,7 @@ namespace NoFocusLossGUI
 
                 if (initResult.ToInt64() == InitializeUnsafeToUnload)
                 {
+                    SetInjectedMarker(current.Id);
                     MarkAsInjected(current);
                     MessageBox.Show(UiStrings.InitializationUnsafeToUnload, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -151,7 +281,14 @@ namespace NoFocusLossGUI
                 if (initResult == IntPtr.Zero)
                 {
                     if (UnloadDllCompletely(current.Id, dll) != RemoteCallStatus.Completed)
+                    {
+                        SetInjectedMarker(current.Id);
                         MarkAsInjected(current);
+                    }
+                    else
+                    {
+                        ClearInjectedMarker(current.Id);
+                    }
 
                     MessageBox.Show(UiStrings.InitializationFailed, UiStrings.WindowTitle,
                         MessageBoxButton.OK, MessageBoxImage.Error);
@@ -165,6 +302,7 @@ namespace NoFocusLossGUI
 
                     if (optionStatus == RemoteCallStatus.TimedOut)
                     {
+                        SetInjectedMarker(current.Id);
                         MarkAsInjected(current);
                         MessageBox.Show(UiStrings.CursorOptionTimedOut, UiStrings.WindowTitle,
                             MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -174,7 +312,14 @@ namespace NoFocusLossGUI
                     if (optionStatus != RemoteCallStatus.Completed || optionResult == IntPtr.Zero)
                     {
                         if (UnloadDllCompletely(current.Id, dll) != RemoteCallStatus.Completed)
+                        {
+                            SetInjectedMarker(current.Id);
                             MarkAsInjected(current);
+                        }
+                        else
+                        {
+                            ClearInjectedMarker(current.Id);
+                        }
 
                         MessageBox.Show(UiStrings.CursorOptionFailed, UiStrings.WindowTitle,
                             MessageBoxButton.OK, MessageBoxImage.Error);
@@ -182,6 +327,7 @@ namespace NoFocusLossGUI
                     }
                 }
 
+                SetInjectedMarker(current.Id);
                 MarkAsInjected(current);
             }
             catch (Exception ex)
@@ -205,6 +351,7 @@ namespace NoFocusLossGUI
 
                 if (FindLoadedModule(current, dll) == null)
                 {
+                    ClearInjectedMarker(selected.Id);
                     InjectedProcesses.Items.Remove(selected);
                     if (current.WindowHandle != IntPtr.Zero)
                         Processes.Items.Add(current);
@@ -226,6 +373,7 @@ namespace NoFocusLossGUI
                     return;
                 }
 
+                ClearInjectedMarker(selected.Id);
                 InjectedProcesses.Items.Remove(selected);
                 try
                 {
