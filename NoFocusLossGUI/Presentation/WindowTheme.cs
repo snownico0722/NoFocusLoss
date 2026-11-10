@@ -23,6 +23,10 @@ internal sealed class WindowTheme
     {
         _window = window;
         _warm = warm;
+        window.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri($"/{typeof(WindowTheme).Assembly.GetName().Name};component/Presentation/ScrollBars.xaml", UriKind.Relative),
+        });
         window.FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
         window.FontSize = 13;
         window.UseLayoutRounding = true;
@@ -77,6 +81,12 @@ internal sealed class WindowTheme
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ClientRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetClientRect(IntPtr hwnd, out ClientRect rect);
+
     // Used by Windows CI. Render the real WPF view; do not install hooks or invoke app actions.
     internal static async System.Threading.Tasks.Task CaptureAsync(Window window, WindowTheme theme, string directory)
     {
@@ -86,7 +96,10 @@ internal sealed class WindowTheme
             theme.Apply(dark);
             window.UpdateLayout();
             await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth), (int)Math.Ceiling(window.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            var dpi = VisualTreeHelper.GetDpi(window);
+            GetClientRect(new WindowInteropHelper(window).Handle, out var client);
+            var bitmap = new RenderTargetBitmap((int)Math.Ceiling(client.Right / dpi.DpiScaleX),
+                (int)Math.Ceiling(client.Bottom / dpi.DpiScaleY), 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(window);
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using var stream = File.Create(Path.Combine(directory, dark ? "dark.png" : "light.png"));
