@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>SharpestInjector</AssemblyName>
+    <RootNamespace>SharpestInjector</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SharpestInjector/SharpestInjector/*.cs" Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

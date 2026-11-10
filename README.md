@@ -1,76 +1,35 @@
-# NoFocusLoss
-This is a utility that prevents games from pausing/muting on background by making sure the unfocus message doesn't get to it.
+# NoFocusLoss · WPF / .NET 10
 
-This will break some things but uhh
+A Windows desktop utility that prevents supported offline games from pausing or muting when unfocused.
 
-Uses injection since I can't really find any other way to do what I need.
+## Current desktop application
 
-# Caution
-Use this utility at your own risk! This utility uses process injection. 
+The application is WPF on **.NET 10**, with a redesigned searchable two-pane window list, light/dark appearance, keyboard focus indicators, and English / Simplified Chinese / Traditional Chinese resources. The old .NET Framework project and settings scaffolding are removed. SharpestInjector's pinned source is built by `NoFocusLoss.Core` directly for .NET 10; the upstream .NET Standard project is not part of the build.
 
-Don't use in multiplayer games, only use in games that actually need it. Be careful which process you inject into, as it could cause a softlock, requiring a restart.
+Install **.NET 10 Desktop Runtime x64**, then run `NoFocusLossGUI.exe`. Keep `NoFocusLoss.dll` and `NoFocusLoss64.dll` beside the executable. The GUI is x64; the two native payloads still support the respective 32-bit and 64-bit target processes. Native hooks remain C++ / MinHook, not managed code inside the game. A .NET runtime upgrade does not change the injection safety limitations.
 
-## Usage
+## Build
 
-1. Launch NoFocusLossGUI.exe
+Requires .NET 10 SDK, Visual Studio C++ tools (v143), and Windows SDK. Clone with `--recurse-submodules` and run:
 
-![image](https://github.com/araghon007/NoFocusLoss/assets/10870921/c3a263ea-d35d-4521-adf3-c423694d8033)
+```powershell
+./build.ps1 -Configuration Release
+```
 
-2. Press Refresh. This may take a short while.
+The complete framework-dependent application is in `artifacts/app`. There is no old-runtime target or alternate legacy UI. `--ui-smoke <directory>` renders the actual light/dark WPF window for CI without enumerating or injecting into any process. This is a UI/build check, not an injection compatibility test.
 
-![image](https://github.com/araghon007/NoFocusLoss/assets/10870921/daed98f0-6078-485e-b026-77139057e38c)
+## Safety and behavior
 
-3. From the list on top, select the window name of the game you want to fix. You can also type the name on your keyboard after clicking on any item for it to be selected. Magic!
+This utility uses process injection. Only use it in offline games that actually need it. Do not use it with multiplayer or anti-cheat protected games. Selecting the wrong process can leave that application unresponsive and require a restart.
 
-![NoFocusLossGUI_3Eq3gTvu8R](https://github.com/araghon007/NoFocusLoss/assets/10870921/5eb3f0bd-2467-4cdb-b85d-dff27e9425c5)
+Choose a window in the left panel and select **Inject**. The cursor option applies at injection time. Injected windows appear on the right; select one and choose **Unload** to remove the hook. Search matches window titles and executable names. Closing the GUI does not silently unload another process.
 
-4. Click on Inject
+The native component filters focus messages and hooks relevant foreground/cursor functions. It does not guarantee support for every engine, overlays, controller API or secondary window. Targeting elevated applications still requires sufficient privileges; this upgrade does not bypass UAC or process protection.
 
-![NoFocusLossGUI_hNECUefsBt](https://github.com/araghon007/NoFocusLoss/assets/10870921/8dc1c1f8-f427-4b28-9614-c58f7ee01174)
+## Verification
 
-5. Enjoy!
+Windows CI builds both native payloads and the .NET 10 application, then renders the real WPF window in light and dark mode. This does not claim real-game injection, timeout, or unload compatibility has been tested. Those paths retain the existing implementation and require Windows validation with benign test applications before release.
 
-To revert the fix, click on the game in the bottom list and click Unload.
+## Third-party code
 
-![image](https://github.com/araghon007/NoFocusLoss/assets/10870921/5394dfdc-1a10-425c-b27b-7d891f027c3b)
-
-
-## Why?
-Multimonitor users
-
-## How?
-Magic beyond my comprehension (I will forget how this entire repo works within a week)
-
-Really though, it's just replacing the window's WndProc to block certain messages and detouring calls to GetForegroundWindow and SetCursorPos
-
-## Features:
-- Alt-tab during cutscenes without having to worry about them pausing or muting
-- Play games on background using a controller as long as they're using xinput and not Windows.Gaming.Input (Thanks Microsoft)
-- Bypass Unity's shit no good very bad input system that makes you unable to use controllers when the game isn't focused, even in VR
-- Stops mouse capture by disabling calls to SetCursorPos (which is a dumb way to do capture in the first place)
-
-## Limitations:
-- For now only affects the main window of the injected program
-
-## Drawbacks:
-- Injection, maybe don't use it in multiplayer games
-- While active makes it very difficult, if not impossible, to interact with window title bar elements, such as dragging, minimize/maximize and close if the game captures the mouse cursor
-
-## Tested Games:
-- Teardown
-- Alan Wake
-- Need For Speed 2015 (2016)
-- I Expect You To Die 3 (yay, this fixed controller input)
-- The Long Dark
-
-## Known Issues:
-- EA's Origin overlay appears frozen, until you try alt-tabbing which forces it to refresh
-
-## TODO:
-- Figure out automatic injection?
-- Maybe a truly global solution?
-- Try to do this with UWP apps (Yeah, good luck)
-- Add support for doing this for multiple app windows, and specifying a window you want to do this with other than the supposedly main one
-- Maybe add some way to force games that use SetCursorPos for mouse capture to use ClipCursor instead, a counter that would count the amount of SetCursorPos calls per second and then redirect?
-
-### Thanks to pretty much all the same people from my X1nput repo, since I kinda used that as a base for this, plus whoever is mentioned in the code
+Original project attribution and licensing are retained in `LICENSE.txt`. MinHook and SharpestInjector remain pinned submodules with their original license files; the publish directory includes those notices. The SharpestInjector source is not a separate legacy-runtime application.

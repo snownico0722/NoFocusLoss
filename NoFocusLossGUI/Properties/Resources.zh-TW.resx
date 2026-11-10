@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -138,4 +138,14 @@
   <data name="UnloadTimedOut" xml:space="preserve"><value>NoFocusLoss 關閉/卸載逾時。由於遠端呼叫可能仍在執行，DLL 已保持載入狀態。請先重新整理清單，再重試。</value></data>
   <data name="UnloadUnsafe" xml:space="preserve"><value>NoFocusLoss 無法安全移除 Hook 並卸載，因此 DLL 已保持載入狀態。</value></data>
   <data name="UnloadFailedWithMessage" xml:space="preserve"><value>卸載失敗：{0}{1}</value></data>
+  <data name="AppSubtitle" xml:space="preserve"><value>選擇視窗，管理背景執行狀態</value></data>
+  <data name="ThemeTooltip" xml:space="preserve"><value>切換深淺外觀</value></data>
+  <data name="SearchHint" xml:space="preserve"><value>搜尋視窗標題或程式名稱</value></data>
+  <data name="AvailableTitle" xml:space="preserve"><value>可用視窗</value></data>
+  <data name="AvailableHint" xml:space="preserve"><value>選擇視窗後，按下注入。</value></data>
+  <data name="ManagedTitle" xml:space="preserve"><value>已注入視窗</value></data>
+  <data name="ManagedHint" xml:space="preserve"><value>選擇視窗，可安全卸載 Hook。</value></data>
+  <data name="EmptyAvailable" xml:space="preserve"><value>沒有相符的視窗。開啟程式後重新整理。</value></data>
+  <data name="EmptyManaged" xml:space="preserve"><value>暫無相符的已注入視窗。</value></data>
+  <data name="SafetyNote" xml:space="preserve"><value>本工具使用處理程序注入。僅用於確有需要的單機遊戲，請勿用於連線或有反作弊保護的遊戲。</value></data>
 </root>

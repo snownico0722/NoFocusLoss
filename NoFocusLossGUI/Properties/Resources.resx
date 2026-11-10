@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -138,4 +138,14 @@
   <data name="UnloadTimedOut" xml:space="preserve"><value>NoFocusLoss shutdown/unload timed out. The DLL was left loaded because the remote call may still be running. Refresh the list before trying again.</value></data>
   <data name="UnloadUnsafe" xml:space="preserve"><value>NoFocusLoss couldn't remove its hooks and unload safely, so the DLL was left loaded.</value></data>
   <data name="UnloadFailedWithMessage" xml:space="preserve"><value>Unload failed:{0}{1}</value></data>
+  <data name="AppSubtitle" xml:space="preserve"><value>Choose a window. Keep its background running.</value></data>
+  <data name="ThemeTooltip" xml:space="preserve"><value>Switch light / dark appearance</value></data>
+  <data name="SearchHint" xml:space="preserve"><value>Search window title or application</value></data>
+  <data name="AvailableTitle" xml:space="preserve"><value>Available windows</value></data>
+  <data name="AvailableHint" xml:space="preserve"><value>Select a window, then inject.</value></data>
+  <data name="ManagedTitle" xml:space="preserve"><value>Injected windows</value></data>
+  <data name="ManagedHint" xml:space="preserve"><value>Select a window to safely unload the hook.</value></data>
+  <data name="EmptyAvailable" xml:space="preserve"><value>No matching windows. Open an application or refresh.</value></data>
+  <data name="EmptyManaged" xml:space="preserve"><value>No injected windows match your search.</value></data>
+  <data name="SafetyNote" xml:space="preserve"><value>Uses process injection. Use only with offline games that need it; not with multiplayer or anti-cheat protected games.</value></data>
 </root>

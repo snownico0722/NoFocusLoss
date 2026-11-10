@@ -1,0 +1,61 @@
+name: Windows build
+
+on:
+  push:
+    branches: [master, 'codex/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Source snapshot
+        shell: python
+        run: |
+          import pathlib, subprocess, zipfile
+          paths = subprocess.check_output(['git', 'ls-files', '--recurse-submodules', '-z']).decode().split('\0')
+          with zipfile.ZipFile('NoFocusLoss-source.zip', 'w', zipfile.ZIP_DEFLATED) as out:
+              for name in paths:
+                  if name and pathlib.Path(name).is_file():
+                      out.write(name)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NoFocusLoss-source
+          path: NoFocusLoss-source.zip
+          retention-days: 7
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build native payloads and .NET 10 application
+        shell: pwsh
+        run: ./build.ps1 -Configuration Release
+      - name: WPF smoke and visual snapshots
+        shell: pwsh
+        run: |
+          $app = (Resolve-Path 'artifacts/app/NoFocusLossGUI.exe').Path
+          $process = Start-Process $app -ArgumentList '--ui-smoke', 'artifacts/ui-smoke' -PassThru
+          if (-not $process.WaitForExit(30000)) { Stop-Process $process -Force; throw 'WPF smoke timed out' }
+          if ($process.ExitCode -ne 0) { throw "WPF smoke failed: $($process.ExitCode)" }
+          if (-not (Test-Path artifacts/ui-smoke/light.png)) { throw 'Missing light snapshot' }
+          if (-not (Test-Path artifacts/ui-smoke/dark.png)) { throw 'Missing dark snapshot' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NoFocusLoss-ui-smoke
+          path: artifacts/ui-smoke/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NoFocusLoss-win-x64
+          path: artifacts/app/
