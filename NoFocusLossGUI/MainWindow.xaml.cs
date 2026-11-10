@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Diagnostics;
 using SharpestInjector;
 using System.Windows;
@@ -61,8 +61,9 @@ namespace NoFocusLossGUI
         public MainWindow()
         {
             InitializeComponent();
-            Dll32 = PeFile.Parse("NoFocusLoss.dll");
-            Dll64 = PeFile.Parse("NoFocusLoss64.dll");
+            _theme = new WindowTheme(this, warm: true);
+            Dll32 = PeFile.Parse(Path.Combine(AppContext.BaseDirectory, "NoFocusLoss.dll"));
+            Dll64 = PeFile.Parse(Path.Combine(AppContext.BaseDirectory, "NoFocusLoss64.dll"));
         }
 
         public List<ProcessInfo> ProcessBindTest = new List<ProcessInfo>();
